@@ -1,0 +1,7 @@
+autopep8==2.0.4
+mypy==1.5.1
+mypy-extensions==1.0.0
+psutil==5.9.5
+pycodestyle==2.11.0
+tomli==2.0.1
+typing_extensions==4.7.1

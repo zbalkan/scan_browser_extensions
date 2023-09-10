@@ -13,8 +13,6 @@ from typing import Any, Literal, Optional
 
 import psutil
 
-APPNAME: str = "BROWSER_EXTS"
-
 
 @dataclass
 class Permission:
@@ -53,7 +51,7 @@ class ExtensionInfo:
     optional_permissions: Optional[Permission] = None
 
 
-def is_firefox_installed() -> bool:
+def __is_firefox_installed() -> bool:
     firefox_path: str
     if sys.platform == 'win32':
         logging.info('Windows system detected')
@@ -79,7 +77,7 @@ def is_firefox_installed() -> bool:
         return False
 
 
-def get_firefox_installed_extensions(usernames: list[str]) -> list[ExtensionInfo]:
+def __get_firefox_installed_extensions(usernames: list[str]) -> list[ExtensionInfo]:
     extension_info_list: list[ExtensionInfo] = []
 
     for username in usernames:
@@ -129,7 +127,7 @@ def get_firefox_installed_extensions(usernames: list[str]) -> list[ExtensionInfo
     return extension_info_list
 
 
-def is_chrome_installed() -> bool:
+def __is_chrome_installed() -> bool:
     chrome_path: str
     if sys.platform == 'win32':
         logging.info('Windows system detected')
@@ -155,11 +153,11 @@ def is_chrome_installed() -> bool:
         return False
 
 
-def get_chrome_installed_extensions(usernames: list[str]) -> list[ExtensionInfo]:
+def __get_chrome_installed_extensions(usernames: list[str]) -> list[ExtensionInfo]:
     return __get_chromium_installed_extensions(usernames=usernames, browser='Google Chrome')
 
 
-def is_edge_installed() -> bool:
+def __is_edge_installed() -> bool:
     chrome_path: str
     if sys.platform == 'win32':
         logging.info('Windows system detected')
@@ -185,7 +183,7 @@ def is_edge_installed() -> bool:
         return False
 
 
-def get_edge_installed_extensions(usernames: list[str]) -> list[ExtensionInfo]:
+def __get_edge_installed_extensions(usernames: list[str]) -> list[ExtensionInfo]:
     return __get_chromium_installed_extensions(usernames=usernames, browser='Microsoft Edge')
 
 
@@ -229,9 +227,6 @@ def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['
                         extension_type = 'extension'
 
                         if "MSG" in extension_name:
-                            if extension_folder == 'nngceckbapebfimnlniiiahkandclblb' or extension_folder == 'kcpnkledgcbobhkgimpbmejgockkplob':
-                                print('Beware of the problems!')
-
                             messages_folder: str = os.path.join(
                                 extensions_path, extension_folder, extension_version, '_locales', 'en')
                             messages_file: str = os.listdir(messages_folder)[0]
@@ -250,7 +245,8 @@ def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['
                                     # There are packages in a weird nested structure
                                     temp = messages.get(ext_name_obj, None)
                                     if temp:
-                                        extension_name = temp.get('message', None)
+                                        extension_name = temp.get(
+                                            'message', None)
                                     else:
                                         extension_name = ext_name_obj
                                 else:
@@ -269,7 +265,8 @@ def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['
                                     # There are packages in a weird nested structure
                                     temp = messages.get(ext_desc_obj, None)
                                     if temp:
-                                        extension_description = temp.get('message', None)
+                                        extension_description = temp.get(
+                                            'message', None)
                                     else:
                                         extension_description = ext_desc_obj
                                 else:
@@ -322,57 +319,13 @@ def get_extension_info() -> list[ExtensionInfo]:
     extension_info_list: list[ExtensionInfo] = []
     user_list: list[str] = [u.name for u in psutil.users()]
 
-    if is_firefox_installed():
-        extension_info_list.extend(get_firefox_installed_extensions(user_list))
-    if is_chrome_installed():
-        extension_info_list.extend(get_chrome_installed_extensions(user_list))
-    if is_edge_installed():
-        extension_info_list.extend(get_edge_installed_extensions(user_list))
+    if __is_firefox_installed():
+        extension_info_list.extend(
+            __get_firefox_installed_extensions(user_list))
+    if __is_chrome_installed():
+        extension_info_list.extend(
+            __get_chrome_installed_extensions(user_list))
+    if __is_edge_installed():
+        extension_info_list.extend(__get_edge_installed_extensions(user_list))
 
     return extension_info_list
-
-
-def get_root_dir() -> str:
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    elif __file__:
-        return os.path.dirname(__file__)
-    else:
-        return './'
-
-
-def main() -> None:
-
-    logging.basicConfig(filename=os.path.join(get_root_dir(), f'{APPNAME}.log'),
-                        encoding='utf-8',
-                        format='%(asctime)s:%(levelname)s:%(message)s',
-                        datefmt="%Y-%m-%dT%H:%M:%S%z",
-                        level=logging.INFO)
-
-    excepthook = logging.error
-    logging.info('Starting')
-
-    extensions: list[ExtensionInfo] = get_extension_info()
-    for ext in extensions:
-        print(f"{ext.browser}\t:\t{ext.name} {ext.version}")
-
-
-if __name__ == "__main__":
-    try:
-        main()
-        logging.info('Exiting')
-    except KeyboardInterrupt:
-        logging.info('Cancelled by user.')
-        logging.error("Cancelled by user.")
-        logging.info('Exiting')
-        try:
-            sys.exit(0)
-        except SystemExit:
-            os._exit(0)
-    except Exception as ex:
-        logging.info('ERROR: ' + str(ex))
-        logging.info('Exiting')
-        try:
-            sys.exit(1)
-        except SystemExit:
-            os._exit(1)
