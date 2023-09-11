@@ -22,15 +22,6 @@ def get_root_dir() -> str:
 
 def main() -> None:
 
-    logging.basicConfig(filename=os.path.join(get_root_dir(), f'{APPNAME}.log'),
-                        encoding='utf-8',
-                        format='%(asctime)s:%(levelname)s:%(message)s',
-                        datefmt="%Y-%m-%dT%H:%M:%S%z",
-                        level=logging.INFO)
-
-    excepthook = logging.error
-    logging.info('Starting')
-
     extensions: list[ExtensionInfo] = get_extension_info()
     for ext in extensions:
         print(f"{ext.browser}\t:\t{ext.name} {ext.version}")
@@ -38,6 +29,14 @@ def main() -> None:
 
 if __name__ == "__main__":
     try:
+        logging.basicConfig(filename=os.path.join(get_root_dir(), f'{APPNAME}.log'),
+                            encoding='utf-8',
+                            format='%(asctime)s:%(levelname)s:%(message)s',
+                            datefmt="%Y-%m-%dT%H:%M:%S%z",
+                            level=logging.INFO)
+
+        excepthook = logging.error
+        logging.info('Starting')
         main()
         logging.info('Exiting')
     except KeyboardInterrupt:
