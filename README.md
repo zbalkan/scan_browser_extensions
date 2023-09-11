@@ -4,10 +4,12 @@ This proof of concept application scans extensions on Mozilla Firefox, Google Ch
 
 Even though we can have an inventory of software on our servers, the extensions are another threat vector to be considered. The goal is to allow a cross-platform script to allow extension information collection.
 
+The code is based on (Andy Svintsitsky's work)[https://github.com/andysvints/PowerShellIT/tree/master/PowerShellIT%20%235%20-%20Browser%20Extensions].
+
 ## Roadmap
+
+[x] Add extension risk analysis
 
 [ ] Test on Linux
 
 [ ] Test on Mac
-
-[ ] Add extension risk analysis
