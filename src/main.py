@@ -5,8 +5,10 @@
 import logging
 import os
 import sys
+from typing import Optional
 
 from extensions import ExtensionInfo, get_extension_info
+from crxcavator import get_risk_report, RiskReport
 
 APPNAME: str = "BROWSER_EXTS"
 
@@ -23,8 +25,15 @@ def get_root_dir() -> str:
 def main() -> None:
 
     extensions: list[ExtensionInfo] = get_extension_info()
+
     for ext in extensions:
-        print(f"{ext.browser}\t:\t{ext.name} {ext.version}")
+        report: Optional[RiskReport] = get_risk_report(
+            extension_id=ext.extension_id, extension_version=ext.version, extension_platform=ext.browser_short)
+        level: str = 'Unknown'
+        if report is not None:
+            level = report.RiskLevel
+        print(
+            f"{ext.browser}\t: {ext.name} {ext.version} ({ext.extension_type})\t(Risk:\t{level})")
 
 
 if __name__ == "__main__":
