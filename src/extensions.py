@@ -35,8 +35,9 @@ class Permission:
 class ExtensionInfo:
     username: str
     browser: str
+    browser_short: Literal['Firefox', 'Chrome', 'Edge']
     profile: str
-    id: str
+    extension_id: str
     name: str
     version: str
     extension_type: str
@@ -127,24 +128,29 @@ def __get_firefox_installed_extensions(usernames: list[str]) -> list[ExtensionIn
 
                 for addon in addons:
                     extension_info = ExtensionInfo(
-                        username,
-                        "Mozilla Firefox",
-                        os.path.dirname(ext_file),
-                        addon.get("id", ""),
-                        addon.get("defaultLocale", {}).get("name", ""),
-                        addon.get("version", ""),
-                        addon.get("Type", ""),
-                        addon.get("defaultLocale", {}).get("description", ""),
-                        addon.get("defaultLocale", {}).get("creator", ""),
-                        addon.get("defaultLocale", {}).get("homepageURL", ""),
-                        addon.get("active", False),
-                        datetime.fromtimestamp(
+                        username=username,
+                        browser='Mozilla Firefox',
+                        browser_short='Firefox',
+                        profile=os.path.dirname(ext_file),
+                        extension_id=addon.get("id", ""),
+                        name=addon.get("defaultLocale", {}).get("name", ""),
+                        version=addon.get("version", ""),
+                        extension_type=addon.get("type", ""),
+                        description=addon.get("defaultLocale", {}).get(
+                            "description", ""),
+                        creator=addon.get("defaultLocale", {}
+                                          ).get("creator", ""),
+                        homepage_url=addon.get(
+                            "defaultLocale", {}).get("homepageURL", ""),
+                        active=addon.get("active", False),
+                        install_date=datetime.fromtimestamp(
                             float(addon.get("installDate", 0)) / 1000),
-                        datetime.fromtimestamp(
+                        update_date=datetime.fromtimestamp(
                             float(addon.get("updateDate", 0)) / 1000),
-                        addon.get("path", ""),
-                        Permission.parse(addon.get("userPermissions", None)),
-                        Permission.parse(
+                        path=addon.get("path", ""),
+                        user_permissions=Permission.parse(
+                            addon.get("userPermissions", None)),
+                        optional_permissions=Permission.parse(
                             addon.get('optionalPermissions', None))
                     )
 
@@ -293,6 +299,11 @@ def __parse_chrome_extension_name(extension_name, messages) -> str:
 def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['Google Chrome', 'Microsoft Edge']) -> list[ExtensionInfo]:
     extension_info_list: list[ExtensionInfo] = []
 
+    if browser == 'Google Chrome':
+        browser_short = 'Chrome'
+    else:
+        browser_short = 'Edge'
+
     for username in usernames:
         profiles_path: str = __get_chrome_profile_path(
             username=username, browser=browser)
@@ -359,10 +370,11 @@ def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['
                         extension_info = ExtensionInfo(
                             username=username,
                             browser=browser,
+                            browser_short=browser_short,
                             profile=profile,
-                            id=extension_folder,
+                            extension_id=extension_folder,
                             name=extension_name,
-                            version=extension_version,
+                            version=extension_version.replace('_0', ''),
                             extension_type=extension_type,
                             description=extension_description,
                             creator=extension_creator,
