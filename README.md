@@ -6,6 +6,10 @@ Even though we can have an inventory of software on our servers, the extensions 
 
 The code is based on [Andy Svintsitsky's work](https://github.com/andysvints/PowerShellIT/tree/master/PowerShellIT%20%235%20-%20Browser%20Extensions).
 
+I recently added the connections/domains used by extensions thanks to [ExtensionHound](https://github.com/arsolutioner/ExtensionHound) project.
+
+## About risk reports
+
 Since CRXcavator is not active for some time, the risk assessment feature is removed.
 
 ## Usage

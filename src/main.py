@@ -1,11 +1,10 @@
 #! /usr/bin/env python3
 
-import json
 import logging
 import os
 import sys
 
-from extensions import get_extension_info
+from extensions import Scanner
 
 APPNAME: str = "BROWSER_EXTS"
 
@@ -21,8 +20,9 @@ def get_root_dir() -> str:
 
 def main() -> None:
 
-    for ext in get_extension_info():
-        print(json.dumps(ext.__dict__, indent=4, sort_keys=True, default=str))
+    scanner = Scanner()
+    for ext in scanner.get_extension_info():
+        print(ext)
 
 
 if __name__ == "__main__":
