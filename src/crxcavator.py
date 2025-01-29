@@ -1,10 +1,8 @@
-#! /usr/bin/env python3
-# -*- coding: UTF-8 -*-
-
-from dataclasses import dataclass
-from typing import Literal, Any, Optional
-import requests
 import json
+from dataclasses import dataclass
+from typing import Any, Literal, Optional
+
+import requests
 
 BASE_URL: str = 'https://api.crxcavator.io/v1/report'
 
@@ -37,7 +35,7 @@ class RiskReport:
 
     @staticmethod
     def parse(response: Any) -> "RiskReport":
-        risk: dict = response.get('data').get('risk')
+        risk: dict[str, Any] = response.get('data').get('risk')
         risk_score = int(risk.get('total', 0))
         if risk_score <= 377:
             risk_level = 'Low'
