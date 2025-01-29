@@ -6,15 +6,11 @@ Even though we can have an inventory of software on our servers, the extensions 
 
 The code is based on [Andy Svintsitsky's work](https://github.com/andysvints/PowerShellIT/tree/master/PowerShellIT%20%235%20-%20Browser%20Extensions).
 
+Since CRXcavator is not active for some time, the risk assessment feature is removed.
+
 ## Usage
 
 1. Create a virtual environment of your choice.
 2. Use `pip install - r requirements.txt`.
 3. Run `python3 src/main.py`.
 4. Profit!
-
-## Roadmap
-
-- [x] Add extension risk analysis
-- [ ] Test on Linux
-- [ ] Test on Mac
