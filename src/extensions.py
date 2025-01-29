@@ -409,42 +409,50 @@ class Scanner:
         return extension_info_list
 
     def __get_chromium_connections(self, profile_path: str) -> list[Any]:
-        network_state_file: str = os.path.join(profile_path, 'Network', 'Network Persistent State')
+        # Define possible paths
+        possible_paths = [
+            os.path.join(profile_path, 'Network', 'Network Persistent State'),
+            os.path.join(profile_path, 'Network Persistent State')
+        ]
 
-        if not os.path.exists(network_state_file):
-            # Try alternate path (just in case)
-            alt_state_file = os.path.join(
-                profile_path, 'Network Persistent State')
-            if os.path.exists(alt_state_file):
-                network_state_file = alt_state_file
-            else:
-                return []
+        # Select the first valid file path
+        network_state_file = next(
+            (path for path in possible_paths if os.path.exists(path)), None)
 
-        with open(network_state_file, 'r', encoding='utf-8') as nf:
-            try:
+        if network_state_file is None:
+            logging.warning(
+                f"No Network Persistent State file found in {profile_path}")
+            return []
+
+        # Attempt to read and parse the JSON file
+        try:
+            with open(network_state_file, 'r', encoding='utf-8') as nf:
                 network_state: Any = json.load(nf)
-            except json.JSONDecodeError:
-                return []
+        except (json.JSONDecodeError, OSError) as e:
+            logging.warning(f"Failed to read {network_state_file}: {e}")
+            return []
 
-        connections = []
+        connections: list[Connection] = []
+        properties = network_state.get('net', {}).get(
+            'http_server_properties', {})
 
-        if 'net' in network_state and 'http_server_properties' in network_state['net']:
-            properties = network_state['net']['http_server_properties']
+        # Process active connections
+        connections.extend(filter(None, [
+            Connection(domain_name=server.get('server', '').replace(
+                'https://', '').split(':')[0], active=True)
+            if self.__decode(server.get('anonymization', [None])[0]) and server.get('server')
+            else None
+            for server in properties.get('servers', [])
+        ]))
 
-            # Process active connections
-            for server in properties.get('servers', []):
-                if server.get('anonymization') and len(server['anonymization']) > 0:
-                    ext_id = self.__decode(server['anonymization'][0])
-                    if ext_id:
-                        domain = server['server'].replace('https://', '').split(':')[0]
-                        connections.append(Connection(domain_name=domain, active=True))
+        # Process broken connections
+        connections.extend(filter(None, [
+            Connection(domain_name=broken.get('host', ''), active=False)
+            if self.__decode(broken.get('anonymization', [None])[0]) and broken.get('host')
+            else None
+            for broken in properties.get('broken_alternative_services', [])
+        ]))
 
-            # Process broken connections
-            for broken in properties.get('broken_alternative_services', []):
-                if broken.get('anonymization') and len(broken['anonymization']) > 0:
-                    ext_id = self.__decode(broken['anonymization'][0])
-                    if ext_id:
-                        connections.append(Connection(domain_name=broken['host'], active=False))
         return connections
 
     def get_extension_info(self) -> list[ExtensionInfo]:
