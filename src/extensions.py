@@ -1,7 +1,3 @@
-#! /usr/bin/env python3
-# -*- coding: UTF-8 -*-
-
-
 import json
 import logging
 import os
@@ -9,7 +5,7 @@ import shutil
 import sys
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Union
 
 import psutil
 
@@ -23,9 +19,9 @@ class Permission:
     def parse(data: Optional[Any]) -> Optional['Permission']:
         if data is None:
             return None
-        if type(data) is dict:
-            permission: Any = data.get('permissions', None)
-            origins: Any = data.get('origins', None)
+        if isinstance(data, dict):
+            permission: Any = data.get('permissions', None)  # type: ignore
+            origins: Any = data.get('origins', None)  # type: ignore
             return Permission(permission, origins)
         else:
             raise TypeError(f'Expected dict, got {type(data)}')
@@ -81,7 +77,7 @@ def __is_firefox_installed() -> bool:
         return False
 
 
-def __get_firefox_profile_path(username) -> str:
+def __get_firefox_profile_path(username: str) -> str:
     if sys.platform == 'win32':
         logging.info('Windows system detected')
         system_drive: Optional[str] = os.getenv("SystemDrive")
@@ -221,7 +217,7 @@ def __get_chrome_installed_extensions(usernames: list[str]) -> list[ExtensionInf
 
 
 def __is_edge_installed() -> bool:
-    chrome_path: str
+    edge_path: str
     if sys.platform == 'win32':
         logging.info('Windows system detected')
         edge_path = 'C:\\\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
@@ -248,16 +244,16 @@ def __get_edge_installed_extensions(usernames: list[str]) -> list[ExtensionInfo]
     return __get_chromium_installed_extensions(usernames=usernames, browser='Microsoft Edge')
 
 
-def __parse_chrome_extension_description(extension_description, messages) -> str:
+def __parse_chrome_extension_description(extension_description: str, messages: dict[str, Any]) -> str:
     desc_field: str = extension_description.removeprefix(
         '__MSG_').removesuffix('__')
-    ext_desc_obj: dict | str = messages.get(
+    ext_desc_obj: Union[dict[str, Any], str] = messages.get(
         desc_field.lower(), desc_field)
 
     if isinstance(ext_desc_obj, dict):
         new_extension_description: str = str(ext_desc_obj.get(
             'message', ''))
-    elif isinstance(ext_desc_obj, str):
+    elif isinstance(ext_desc_obj, str):  # type: ignore
         # There are packages in a weird nested structure
         temp: Any = messages.get(ext_desc_obj, None)
         if temp:
@@ -272,15 +268,13 @@ def __parse_chrome_extension_description(extension_description, messages) -> str
     return new_extension_description
 
 
-def __parse_chrome_extension_name(extension_name, messages) -> str:
+def __parse_chrome_extension_name(extension_name: str, messages: dict[str, Any]) -> str:
     name_field: str = extension_name.removeprefix(
         '__MSG_').removesuffix('__')
-    ext_name_obj: dict | str = messages.get(
-        name_field.lower(), name_field)
+    ext_name_obj: dict | str = messages.get(name_field.lower(), name_field)  # type: ignore
     if isinstance(ext_name_obj, dict):
-        new_extension_name: str = str(ext_name_obj.get(
-            'message', ''))
-    elif isinstance(ext_name_obj, str):
+        new_extension_name: str = str(ext_name_obj.get('message', ''))  # type: ignore
+    elif isinstance(ext_name_obj, str):   # type: ignore
         # There are packages in a weird nested structure
         temp: Any = messages.get(
             ext_name_obj, None)
@@ -299,6 +293,7 @@ def __parse_chrome_extension_name(extension_name, messages) -> str:
 def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['Google Chrome', 'Microsoft Edge']) -> list[ExtensionInfo]:
     extension_info_list: list[ExtensionInfo] = []
 
+    browser_short: str
     if browser == 'Google Chrome':
         browser_short = 'Chrome'
     else:
@@ -344,7 +339,7 @@ def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['
                             messages_folder: str = os.path.join(
                                 extensions_path, extension_folder, extension_version, '_locales', 'en')
                             if os.path.exists(messages_folder) is False:
-                                messages_folder: str = os.path.join(
+                                messages_folder = os.path.join(
                                     extensions_path, extension_folder, extension_version, '_locales', 'en-US')
 
                             messages_file: str = os.listdir(messages_folder)[0]
@@ -370,7 +365,7 @@ def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['
                         extension_info = ExtensionInfo(
                             username=username,
                             browser=browser,
-                            browser_short=browser_short,
+                            browser_short=browser_short,  # type: ignore
                             profile=profile,
                             extension_id=extension_folder,
                             name=extension_name,

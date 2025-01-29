@@ -15,6 +15,6 @@ The code is based on [Andy Svintsitsky's work](https://github.com/andysvints/Pow
 
 ## Roadmap
 
-  - [x] Add extension risk analysis
-  - [ ] Test on Linux
-  - [ ] Test on Mac
+- [x] Add extension risk analysis
+- [ ] Test on Linux
+- [ ] Test on Mac

@@ -1,14 +1,12 @@
 #! /usr/bin/env python3
-# -*- coding: UTF-8 -*-
-
 
 import logging
 import os
 import sys
 from typing import Optional
 
+from crxcavator import RiskReport, get_risk_report
 from extensions import ExtensionInfo, get_extension_info
-from crxcavator import get_risk_report, RiskReport
 
 APPNAME: str = "BROWSER_EXTS"
 
@@ -55,11 +53,11 @@ if __name__ == "__main__":
         try:
             sys.exit(0)
         except SystemExit:
-            os._exit(0)
+            os._exit(0)  # type: ignore
     except Exception as ex:
         logging.info('ERROR: ' + str(ex))
         logging.info('Exiting')
         try:
             sys.exit(1)
         except SystemExit:
-            os._exit(1)
+            os._exit(1)  # type: ignore
