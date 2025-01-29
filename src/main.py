@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 
-from extensions import get_extension_info
+from extensions import Scanner
 
 APPNAME: str = "BROWSER_EXTS"
 
@@ -20,7 +20,8 @@ def get_root_dir() -> str:
 
 def main() -> None:
 
-    for ext in get_extension_info():
+    scanner = Scanner()
+    for ext in scanner.get_extension_info():
         print(ext)
 
 
