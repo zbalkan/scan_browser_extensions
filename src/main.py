@@ -1,6 +1,5 @@
 #! /usr/bin/env python3
 
-import json
 import logging
 import os
 import sys
@@ -22,7 +21,7 @@ def get_root_dir() -> str:
 def main() -> None:
 
     for ext in get_extension_info():
-        print(json.dumps(ext.__dict__, indent=4, sort_keys=True, default=str))
+        print(ext)
 
 
 if __name__ == "__main__":

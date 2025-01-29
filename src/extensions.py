@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -8,6 +9,15 @@ from datetime import datetime
 from typing import Any, Literal, Optional, Union
 
 import psutil
+
+
+class ExtensionEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, "__dict__"):  # Serialize objects with attributes
+            return obj.__dict__
+        elif isinstance(obj, datetime):  # Serialize datetime objects
+            return obj.isoformat()
+        return super().default(obj)  # Default behavior for other types
 
 
 @dataclass
@@ -25,6 +35,12 @@ class Permission:
             return Permission(permission, origins)
         else:
             raise TypeError(f'Expected dict, got {type(data)}')
+
+
+@dataclass
+class Connection:
+    domain_name: str
+    active: bool
 
 
 @dataclass
@@ -46,6 +62,10 @@ class ExtensionInfo:
     path: str
     user_permissions: Optional[Permission] = None
     optional_permissions: Optional[Permission] = None
+    connections: Optional[list[Connection]] = None
+
+    def __str__(self) -> str:
+        return json.dumps(self, cls=ExtensionEncoder, indent=4, sort_keys=True)
 
 
 def __is_firefox_installed() -> bool:
@@ -290,6 +310,17 @@ def __parse_chrome_extension_name(extension_name: str, messages: dict[str, Any])
     return new_extension_name
 
 
+def __decode(encoded: str) -> Optional[str]:
+    try:
+        decoded = base64.b64decode(encoded).decode('utf-8')
+        if 'chrome-extension://' in decoded:
+            return decoded.split('chrome-extension://')[-1]
+        return None
+    except Exception as e:
+        print(e)
+        return None
+
+
 def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['Google Chrome', 'Microsoft Edge']) -> list[ExtensionInfo]:
     extension_info_list: list[ExtensionInfo] = []
 
@@ -304,7 +335,6 @@ def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['
             username=username, browser=browser)
 
         local_state_path: str = os.path.join(profiles_path, 'Local State')
-
         try:
             with open(local_state_path, 'r', encoding='utf-8') as local_state_file:
                 local_state: Any = json.load(local_state_file)
@@ -362,6 +392,9 @@ def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['
                         perms = dict({'permissions': manifest.get(
                             'permissions', None), 'origins': manifest.get('hostPermissions', None)})
 
+                        connections = __get_chromium_connections(os.path.join(
+                            profiles_path, profile))
+
                         extension_info = ExtensionInfo(
                             username=username,
                             browser=browser,
@@ -380,7 +413,8 @@ def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['
                             path=os.path.join(
                                 extensions_path, extension_folder),
                             user_permissions=Permission().parse(perms),
-                            optional_permissions=Permission()
+                            optional_permissions=Permission(),
+                            connections=connections
                         )
 
                         extension_info_list.append(extension_info)
@@ -392,6 +426,46 @@ def __get_chromium_installed_extensions(usernames: list[str], browser: Literal['
                 f"Something went wrong for user {username}. Exception: {str(e)}")
 
     return extension_info_list
+
+
+def __get_chromium_connections(profile_path: str) -> list[Any]:
+    network_state_file: str = os.path.join(profile_path, 'Network', 'Network Persistent State')
+
+    if not os.path.exists(network_state_file):
+        # Try alternate path (just in case)
+        alt_state_file = os.path.join(
+            profile_path, 'Network Persistent State')
+        if os.path.exists(alt_state_file):
+            network_state_file = alt_state_file
+        else:
+            return []
+
+    with open(network_state_file, 'r', encoding='utf-8') as nf:
+        try:
+            network_state: Any = json.load(nf)
+        except json.JSONDecodeError:
+            return []
+
+    connections = []
+
+    if 'net' in network_state and 'http_server_properties' in network_state['net']:
+        properties = network_state['net']['http_server_properties']
+
+        # Process active connections
+        for server in properties.get('servers', []):
+            if server.get('anonymization') and len(server['anonymization']) > 0:
+                ext_id = __decode(server['anonymization'][0])
+                if ext_id:
+                    domain = server['server'].replace('https://', '').split(':')[0]
+                    connections.append(Connection(domain_name=domain, active=True))
+
+        # Process broken connections
+        for broken in properties.get('broken_alternative_services', []):
+            if broken.get('anonymization') and len(broken['anonymization']) > 0:
+                ext_id = __decode(broken['anonymization'][0])
+                if ext_id:
+                    connections.append(Connection(domain_name=broken['host'], active=False))
+    return connections
 
 
 def get_extension_info() -> list[ExtensionInfo]:
