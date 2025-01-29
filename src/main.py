@@ -1,12 +1,11 @@
 #! /usr/bin/env python3
 
+import json
 import logging
 import os
 import sys
-from typing import Optional
 
-from crxcavator import RiskReport, get_risk_report
-from extensions import ExtensionInfo, get_extension_info
+from extensions import get_extension_info
 
 APPNAME: str = "BROWSER_EXTS"
 
@@ -22,16 +21,8 @@ def get_root_dir() -> str:
 
 def main() -> None:
 
-    extensions: list[ExtensionInfo] = get_extension_info()
-
-    for ext in extensions:
-        report: Optional[RiskReport] = get_risk_report(
-            extension_id=ext.extension_id, extension_version=ext.version, extension_platform=ext.browser_short)
-        level: str = 'Unknown'
-        if report is not None:
-            level = report.RiskLevel
-        print(
-            f"{ext.browser}\t: {ext.name} {ext.version} ({ext.extension_type})\t(Risk:\t{level})")
+    for ext in get_extension_info():
+        print(json.dumps(ext.__dict__, indent=4, sort_keys=True, default=str))
 
 
 if __name__ == "__main__":
