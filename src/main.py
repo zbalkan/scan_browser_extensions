@@ -80,6 +80,7 @@ class ScannerApp(App):
         datatable.add_column("Username")
         datatable.add_column("Browser")
         datatable.add_column("Profile")
+        datatable.add_column("Risk")
         datatable.add_column("Extension")
         datatable.add_column("Version")
         datatable.add_column("Type")
@@ -92,6 +93,7 @@ class ScannerApp(App):
                 ext.username,
                 ext.browser_short,
                 ext.profile,
+                ext.risk,
                 ext.name,
                 ext.version,
                 ext.extension_type,
