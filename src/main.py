@@ -24,9 +24,9 @@ def get_root_dir() -> str:
         return './'
 
 
-class MyModalScreen(ModalScreen):
+class DetailsScreen(ModalScreen):
     DEFAULT_CSS = """
-        MyModalScreen {
+        DetailsScreen {
             align: center middle;
         }
         """
@@ -40,7 +40,7 @@ class MyModalScreen(ModalScreen):
 ```json
 {self.content}
 ```
-        """
+"""
         container = HorizontalGroup(
             Button("Back"),
             Button("Copy"))
@@ -109,7 +109,7 @@ class ScannerApp(App):
     ) -> None:
         row_key: RowKey = event.row_key
         ext = self.extensions[row_key]
-        screen = MyModalScreen()
+        screen = DetailsScreen()
         screen.content = str(ext)
         self.push_screen(screen, self.modal_screen_callback)
 
