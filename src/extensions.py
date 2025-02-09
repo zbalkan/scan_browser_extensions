@@ -152,7 +152,7 @@ class Scanner:
                             username=username,
                             browser='Mozilla Firefox',
                             browser_short='Firefox',
-                            profile=os.path.dirname(ext_file),
+                            profile=os.path.basename(os.path.dirname(ext_file)).split(".")[1],
                             extension_id=addon.get("id", ""),
                             name=addon.get("defaultLocale", {}).get("name", ""),
                             version=addon.get("version", ""),
