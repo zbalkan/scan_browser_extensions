@@ -50,6 +50,7 @@ class ExtensionInfo:
     browser_short: Literal['Firefox', 'Chrome', 'Edge']
     profile: str
     extension_id: str
+    risk: str
     name: str
     version: str
     extension_type: str
@@ -81,6 +82,21 @@ class Scanner:
         self.has_firefox = self.__is_firefox_installed()
         self.has_chrome = self.__is_chrome_installed()
         self.has_edge = self.__is_edge_installed()
+
+    def __calculate_risk(self, permissions: Optional[Permission]) -> str:
+        # Reference: https://medium.com/quiq-blog/detecting-high-risk-chrome-extensions-with-osquery-bca1a8856448
+        risky_permissions: list[str] = ['clipboardWrite', '<all_urls>', 'tabs', 'cookies', '://*/']
+
+        risky: bool = False
+        if permissions is not None:
+            if permissions.permission is not None:
+                for permission in permissions.permission:
+                    if permission in risky_permissions:
+                        risky = True
+        if risky:
+            return '🚩'
+        else:
+            return '🟢'
 
     def __is_firefox_installed(self) -> bool:
         firefox_path: str
@@ -154,6 +170,7 @@ class Scanner:
                             browser_short='Firefox',
                             profile=os.path.basename(os.path.dirname(ext_file)).split(".")[1],
                             extension_id=addon.get("id", ""),
+                            risk=self.__calculate_risk(Permission.parse(addon.get('permissions', None))),
                             name=addon.get("defaultLocale", {}).get("name", ""),
                             version=addon.get("version", ""),
                             extension_type=addon.get("type", ""),
@@ -381,6 +398,7 @@ class Scanner:
                                 browser=browser,
                                 browser_short=browser_short,  # type: ignore
                                 profile=profile,
+                                risk=self.__calculate_risk(Permission.parse(perms)),
                                 extension_id=extension_folder,
                                 name=extension_name,
                                 version=extension_version.replace('_0', ''),
