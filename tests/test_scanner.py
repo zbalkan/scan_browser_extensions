@@ -78,6 +78,7 @@ class ScannerTests(unittest.TestCase):
             extension = extensions[0]
             self.assertEqual("1.2.3", extension.version)
             self.assertFalse(extension.active)
+            self.assertEqual("🚩", extension.risk)
             self.assertEqual(["https://*/*"], extension.user_permissions.origins)
             self.assertEqual(["tabs"], extension.optional_permissions.permission)
             self.assertEqual(
