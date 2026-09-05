@@ -201,14 +201,24 @@ class Scanner:
         return decoded.split(marker, 1)[1].split("/", 1)[0]
 
     def __load_chromium_settings(self, profile_path: Path) -> dict[str, Any]:
-        preferences_path = profile_path / "Preferences"
-        try:
-            with preferences_path.open("r", encoding="utf-8") as preferences_file:
-                preferences: Any = json.load(preferences_file)
-        except (OSError, json.JSONDecodeError) as exc:
-            logging.warning("Failed to read %s: %s", preferences_path, exc)
-            return {}
-        return preferences.get("extensions", {}).get("settings", {})
+        settings: dict[str, Any] = {}
+
+        for filename in ("Preferences", "Secure Preferences"):
+            preferences_path = profile_path / filename
+            if not preferences_path.is_file():
+                continue
+            try:
+                with preferences_path.open("r", encoding="utf-8") as preferences_file:
+                    preferences: Any = json.load(preferences_file)
+            except (OSError, json.JSONDecodeError) as exc:
+                logging.warning("Failed to read %s: %s", preferences_path, exc)
+                continue
+
+            file_settings = preferences.get("extensions", {}).get("settings", {})
+            if isinstance(file_settings, dict):
+                settings.update(file_settings)
+
+        return settings
 
     def __chromium_profiles(self, user_data_root: Path) -> list[str]:
         profiles: set[str] = set()
@@ -227,7 +237,7 @@ class Scanner:
             for path in user_data_root.iterdir():
                 if not path.is_dir():
                     continue
-                if (path / "Extensions").is_dir() or (path / "Preferences").is_file():
+                if (path / "Extensions").is_dir() or (path / "Preferences").is_file() or (path / "Secure Preferences").is_file():
                     profiles.add(path.name)
         except OSError as exc:
             logging.warning("Failed to enumerate Chromium profiles in %s: %s", user_data_root, exc)
