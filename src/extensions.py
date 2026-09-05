@@ -72,10 +72,30 @@ class Scanner:
         self.platform = sys.platform
 
     def __calculate_risk(self, permissions: Optional[Permission]) -> str:
-        risky_permissions = {"clipboardWrite", "<all_urls>", "tabs", "cookies", "://*/"}
-        if permissions and permissions.permission:
-            if any(permission in risky_permissions for permission in permissions.permission):
-                return "🚩"
+        sensitive_permissions = {
+            "clipboardRead",
+            "clipboardWrite",
+            "cookies",
+            "debugger",
+            "history",
+            "management",
+            "nativeMessaging",
+            "proxy",
+            "scripting",
+            "tabs",
+            "webRequest",
+            "webRequestBlocking",
+        }
+        broad_origins = {"<all_urls>", "*://*/*", "http://*/*", "https://*/*", "://*/"}
+
+        if permissions is None:
+            return "🟢"
+        if permissions.permission and sensitive_permissions.intersection(
+            permissions.permission
+        ):
+            return "🚩"
+        if permissions.origins and broad_origins.intersection(permissions.origins):
+            return "🚩"
         return "🟢"
 
     def __get_firefox_installed_extensions(
@@ -102,6 +122,7 @@ class Scanner:
                 continue
 
             for addon in data.get("addons", []):
+                user_permissions = Permission.parse(addon.get("userPermissions"))
                 extension_info_list.append(
                     ExtensionInfo(
                         username=root.username,
@@ -109,9 +130,7 @@ class Scanner:
                         browser_short="Firefox",
                         profile=profile_path.name,
                         extension_id=addon.get("id", ""),
-                        risk=self.__calculate_risk(
-                            Permission.parse(addon.get("permissions"))
-                        ),
+                        risk=self.__calculate_risk(user_permissions),
                         name=addon.get("defaultLocale", {}).get("name", ""),
                         version=addon.get("version", ""),
                         extension_type=addon.get("type", ""),
@@ -126,7 +145,7 @@ class Scanner:
                             float(addon.get("updateDate", 0)) / 1000
                         ),
                         path=addon.get("path", ""),
-                        user_permissions=Permission.parse(addon.get("userPermissions")),
+                        user_permissions=user_permissions,
                         optional_permissions=Permission.parse(
                             addon.get("optionalPermissions")
                         ),
