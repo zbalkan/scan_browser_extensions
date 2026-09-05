@@ -14,7 +14,7 @@ class BrowserProfileRoot:
     path: Path
 
 
-def _user_roots(platform: str) -> Path:
+def _fallback_user_root(platform: str) -> Path:
     if platform == "win32":
         return Path(os.environ.get("SystemDrive", "C:")) / "Users"
     if platform == "darwin":
@@ -25,18 +25,30 @@ def _user_roots(platform: str) -> Path:
 def discover_user_homes(platform: str | None = None) -> dict[str, Path]:
     """Return local user homes that can contain browser profile artifacts."""
     platform = platform or sys.platform
-    root = _user_roots(platform)
-    if not root.is_dir():
-        return {}
 
-    homes = {
-        path.name: path
-        for path in root.iterdir()
-        if path.is_dir() and not path.is_symlink()
-    }
+    if platform != "win32":
+        try:
+            import pwd
 
-    # Linux commonly has a useful non-/home account (for example root). Add the
-    # current home only when it exists and was not already discovered.
+            homes = {
+                entry.pw_name: Path(entry.pw_dir)
+                for entry in pwd.getpwall()
+                if entry.pw_dir and Path(entry.pw_dir).is_dir()
+            }
+        except ImportError:
+            homes = {}
+    else:
+        homes = {}
+
+    if not homes:
+        root = _fallback_user_root(platform)
+        if root.is_dir():
+            homes = {
+                path.name: path
+                for path in root.iterdir()
+                if path.is_dir()
+            }
+
     current_home = Path.home()
     if current_home.is_dir():
         homes.setdefault(current_home.name, current_home)
