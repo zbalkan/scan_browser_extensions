@@ -52,6 +52,13 @@ class ScannerTests(unittest.TestCase):
         }
         self._write_json(preferences_path, preferences)
 
+    def _scan(self, home: Path, chrome_root: Path):
+        browser_root = BrowserProfileRoot("alice", "Chrome", chrome_root)
+        with patch("extensions.discover_user_homes", return_value={"alice": home}), patch(
+            "extensions.browser_profile_roots", return_value=[browser_root]
+        ):
+            return Scanner().get_extension_info()
+
     def test_reads_manifest_and_preferences(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             home = Path(temp_dir) / "alice"
@@ -68,11 +75,7 @@ class ScannerTests(unittest.TestCase):
                 host_permissions=["https://*/*"],
             )
 
-            browser_root = BrowserProfileRoot("alice", "Chrome", chrome_root)
-            with patch("extensions.discover_user_homes", return_value={"alice": home}), patch(
-                "extensions.browser_profile_roots", return_value=[browser_root]
-            ):
-                extensions = Scanner().get_extension_info()
+            extensions = self._scan(home, chrome_root)
 
             self.assertEqual(1, len(extensions))
             extension = extensions[0]
@@ -86,6 +89,17 @@ class ScannerTests(unittest.TestCase):
                 extension.optional_permissions.origins,
             )
             self.assertEqual("https://example.test/", extension.homepage_url)
+
+    def test_discovers_profile_without_local_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = Path(temp_dir) / "alice"
+            chrome_root = home / ".config" / "google-chrome"
+            extension_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            self._extension(chrome_root, extension_id, "1.0")
+
+            extensions = self._scan(home, chrome_root)
+
+            self.assertEqual([extension_id], [extension.extension_id for extension in extensions])
 
     def test_network_entries_are_attributed_by_extension_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -125,11 +139,7 @@ class ScannerTests(unittest.TestCase):
                 },
             )
 
-            browser_root = BrowserProfileRoot("alice", "Chrome", chrome_root)
-            with patch("extensions.discover_user_homes", return_value={"alice": home}), patch(
-                "extensions.browser_profile_roots", return_value=[browser_root]
-            ):
-                extensions = Scanner().get_extension_info()
+            extensions = self._scan(home, chrome_root)
 
             by_id = {extension.extension_id: extension for extension in extensions}
             self.assertEqual(["a.example"], [c.domain_name for c in by_id[extension_a].connections])
