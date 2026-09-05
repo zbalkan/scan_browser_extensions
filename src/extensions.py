@@ -210,6 +210,30 @@ class Scanner:
             return {}
         return preferences.get("extensions", {}).get("settings", {})
 
+    def __chromium_profiles(self, user_data_root: Path) -> list[str]:
+        profiles: set[str] = set()
+        local_state_path = user_data_root / "Local State"
+
+        try:
+            with local_state_path.open("r", encoding="utf-8") as local_state_file:
+                local_state: Any = json.load(local_state_file)
+            info_cache = local_state.get("profile", {}).get("info_cache", {})
+            if isinstance(info_cache, dict):
+                profiles.update(str(profile) for profile in info_cache)
+        except (OSError, json.JSONDecodeError, AttributeError):
+            pass
+
+        try:
+            for path in user_data_root.iterdir():
+                if not path.is_dir():
+                    continue
+                if (path / "Extensions").is_dir() or (path / "Preferences").is_file():
+                    profiles.add(path.name)
+        except OSError as exc:
+            logging.warning("Failed to enumerate Chromium profiles in %s: %s", user_data_root, exc)
+
+        return sorted(profiles)
+
     def __manifest_path(
         self,
         extensions_path: Path,
@@ -229,11 +253,21 @@ class Scanner:
             version_dirs = [path for path in extension_folder.iterdir() if path.is_dir()]
         except OSError:
             return None
-        if not version_dirs:
-            return None
 
-        latest = max(version_dirs, key=lambda path: path.stat().st_mtime)
-        manifest_path = latest / "manifest.json"
+        latest_path: Optional[Path] = None
+        latest_mtime = -1.0
+        for path in version_dirs:
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            if mtime > latest_mtime:
+                latest_mtime = mtime
+                latest_path = path
+
+        if latest_path is None:
+            return None
+        manifest_path = latest_path / "manifest.json"
         return manifest_path if manifest_path.is_file() else None
 
     def __extension_type(self, manifest: dict[str, Any]) -> str:
@@ -273,16 +307,7 @@ class Scanner:
         extension_info_list: list[ExtensionInfo] = []
         browser = "Google Chrome" if root.browser == "Chrome" else "Microsoft Edge"
 
-        local_state_path = root.path / "Local State"
-        try:
-            with local_state_path.open("r", encoding="utf-8") as local_state_file:
-                local_state: Any = json.load(local_state_file)
-            chrome_profiles = local_state.get("profile", {}).get("info_cache", {}).keys()
-        except (OSError, json.JSONDecodeError, AttributeError) as exc:
-            logging.warning("Failed to read %s: %s", local_state_path, exc)
-            return extension_info_list
-
-        for profile in chrome_profiles:
+        for profile in self.__chromium_profiles(root.path):
             profile_path = root.path / profile
             extensions_path = profile_path / "Extensions"
             if not extensions_path.is_dir():
