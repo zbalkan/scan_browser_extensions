@@ -1,27 +1,23 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 
 import logging
-import os
 import sys
+from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Header, Label, MarkdownViewer
-from textual.widgets._data_table import RowKey
+from textual.widgets import Button, DataTable, Header, MarkdownViewer
 
-from extensions import Scanner
+from extensions import ExtensionInfo, Scanner
 
-APP_NAME: str = "scan_browser_extensions"
+APP_NAME = "scan_browser_extensions"
 
 
-def get_root_dir() -> str:
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    elif __file__:
-        return os.path.dirname(__file__)
-    else:
-        return './'
+def get_root_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent
 
 
 class DetailsScreen(ModalScreen):
@@ -29,121 +25,105 @@ class DetailsScreen(ModalScreen):
         DetailsScreen {
             align: center middle;
         }
-        """
+    """
 
-    content: str = ''
+    def __init__(self, content: str) -> None:
+        super().__init__()
+        self.content = content
 
-    def compose(self):
-
+    def compose(self) -> ComposeResult:
+        safe_content = self.content.replace("```", "\\`\\`\\`")
         markdown_content = f"""
 # Extension Details
 ```json
-{self.content}
+{safe_content}
 ```
 """
-        container = HorizontalGroup(
-            Button("Back"),
-            Button("Copy"))
+        container = HorizontalGroup(Button("Back"), Button("Copy"))
         container.styles.align_horizontal = "center"
 
         yield MarkdownViewer(markdown_content, show_table_of_contents=False)
         yield container
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.label.plain == "Back":  # type: ignore
+        label = event.button.label.plain
+        if label == "Back":
             self.dismiss()
-        elif event.button.label.plain == "Copy":  # type: ignore
+        elif label == "Copy":
             self.app.copy_to_clipboard(self.content)
             self.app.notify("Copied to clipboard.", timeout=2)
-        else:
-            pass
 
 
 class ScannerApp(App):
-    """A Textual app to manage stopwatches."""
-
-    extensions: dict = {}
+    """Display browser extension inventory."""
 
     def compose(self) -> ComposeResult:
-        """Create child widgets for the app."""
         yield Header(name=APP_NAME)
         yield DataTable()
 
     def on_mount(self) -> None:
-        """Called when the app is mounted."""
-
         self.title = APP_NAME
+        self.extensions: dict[object, ExtensionInfo] = {}
 
         datatable = self.query_one(DataTable)
         datatable.cursor_type = "row"
+        for column in (
+            "Username",
+            "Browser",
+            "Profile",
+            "Risk",
+            "Extension",
+            "Version",
+            "Type",
+            "Active",
+            "Installed",
+            "Updated",
+        ):
+            datatable.add_column(column)
 
-        datatable.add_column("Username")
-        datatable.add_column("Browser")
-        datatable.add_column("Profile")
-        datatable.add_column("Risk")
-        datatable.add_column("Extension")
-        datatable.add_column("Version")
-        datatable.add_column("Type")
-        datatable.add_column("Active")
-        datatable.add_column("Installed")
-        datatable.add_column("Updated")
-
-        for ext in Scanner().get_extension_info():
+        for extension in Scanner().get_extension_info():
             row_key = datatable.add_row(
-                ext.username,
-                ext.browser_short,
-                ext.profile,
-                ext.risk,
-                ext.name,
-                ext.version,
-                ext.extension_type,
-                ext.active,
-                ext.install_date,
-                ext.update_date
+                extension.username,
+                extension.browser_short,
+                extension.profile,
+                extension.risk,
+                extension.name,
+                extension.version,
+                extension.extension_type,
+                extension.active,
+                extension.install_date,
+                extension.update_date,
             )
-            self.extensions[row_key] = ext
+            self.extensions[row_key] = extension
 
-        self.app.notify("Press Ctrl+Q to exit.", timeout=2)
+        self.notify("Press Ctrl+Q to exit.", timeout=2)
 
-    def on_data_table_row_selected(
-        self,
-        event: DataTable.RowSelected,
-    ) -> None:
-        row_key: RowKey = event.row_key
-        ext = self.extensions[row_key]
-        screen = DetailsScreen()
-        screen.content = str(ext)
-        self.push_screen(screen, self.modal_screen_callback)
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        extension = self.extensions[event.row_key]
+        self.push_screen(DetailsScreen(str(extension)))
 
-    def modal_screen_callback(self, time) -> None:
-        self.mount(Label(f"Modal dismissed at {time}."))
+
+def main() -> int:
+    logging.basicConfig(
+        filename=get_root_dir() / f"{APP_NAME}.log",
+        encoding="utf-8",
+        format="%(asctime)s:%(levelname)s:%(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S%z",
+        level=logging.INFO,
+    )
+
+    try:
+        logging.info("Starting")
+        ScannerApp().run()
+        logging.info("Exiting")
+        return 0
+    except KeyboardInterrupt:
+        logging.info("Cancelled by user")
+        return 0
+    except Exception:
+        logging.exception("Unhandled error")
+        return 1
 
 
 if __name__ == "__main__":
-    try:
-        logging.basicConfig(filename=os.path.join(get_root_dir(), f'{APP_NAME}.log'),
-                            encoding='utf-8',
-                            format='%(asctime)s:%(levelname)s:%(message)s',
-                            datefmt="%Y-%m-%dT%H:%M:%S%z",
-                            level=logging.INFO)
-
-        excepthook = logging.error
-        logging.info('Starting')
-        app = ScannerApp()
-        app.run()
-        logging.info('Exiting')
-    except KeyboardInterrupt:
-        logging.info('Cancelled by user.')
-        logging.error("Cancelled by user.")
-        logging.info('Exiting')
-        try:
-            sys.exit(0)
-        except SystemExit:
-            os._exit(0)  # type: ignore
-    except Exception as ex:
-        logging.info('ERROR: ' + str(ex))
-        logging.info('Exiting')
-        try:
-            sys.exit(1)
-        except SystemExit:
-            os._exit(1)  # type: ignore
+    raise SystemExit(main())
