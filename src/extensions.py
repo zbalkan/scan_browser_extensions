@@ -178,6 +178,73 @@ class Scanner:
             logging.debug("Failed to decode anonymization key: %s", exc)
             return None
 
+    def __load_chromium_settings(self, profile_path: Path) -> dict[str, Any]:
+        preferences_path = profile_path / "Preferences"
+        try:
+            with preferences_path.open("r", encoding="utf-8") as preferences_file:
+                preferences: Any = json.load(preferences_file)
+        except (OSError, json.JSONDecodeError) as exc:
+            logging.warning("Failed to read %s: %s", preferences_path, exc)
+            return {}
+        return preferences.get("extensions", {}).get("settings", {})
+
+    def __manifest_path(
+        self,
+        extensions_path: Path,
+        extension_folder: Path,
+        setting: dict[str, Any],
+    ) -> Optional[Path]:
+        configured_path = setting.get("path")
+        if configured_path:
+            configured = Path(configured_path)
+            if not configured.is_absolute():
+                configured = extensions_path / configured
+            manifest_path = configured / "manifest.json"
+            if manifest_path.is_file():
+                return manifest_path
+
+        try:
+            version_dirs = [path for path in extension_folder.iterdir() if path.is_dir()]
+        except OSError:
+            return None
+        if not version_dirs:
+            return None
+
+        latest = max(version_dirs, key=lambda path: path.stat().st_mtime)
+        manifest_path = latest / "manifest.json"
+        return manifest_path if manifest_path.is_file() else None
+
+    def __extension_type(self, manifest: dict[str, Any]) -> str:
+        if "theme" in manifest:
+            return "theme"
+        if "app" in manifest:
+            return "app"
+        return "extension"
+
+    def __localize_manifest(
+        self, manifest: dict[str, Any], extension_path: Path
+    ) -> tuple[str, str]:
+        extension_name = manifest.get("name", "")
+        extension_description = manifest.get("description", "")
+        if "__MSG_" not in extension_name and "__MSG_" not in extension_description:
+            return extension_name, extension_description
+
+        locale = manifest.get("default_locale", "en")
+        messages_file = extension_path / "_locales" / locale / "messages.json"
+        if not messages_file.is_file():
+            return extension_name, extension_description
+
+        try:
+            with messages_file.open("r", encoding="utf-8") as messages_json:
+                messages: Any = json.load(messages_json)
+        except (OSError, json.JSONDecodeError):
+            return extension_name, extension_description
+
+        return (
+            self.__parse_chrome_extension_name(extension_name, messages),
+            self.__parse_chrome_extension_description(extension_description, messages),
+        )
+
     def __get_chromium_installed_extensions(
         self, root: BrowserProfileRoot
     ) -> list[ExtensionInfo]:
@@ -194,10 +261,12 @@ class Scanner:
             return extension_info_list
 
         for profile in chrome_profiles:
-            extensions_path = root.path / profile / "Extensions"
+            profile_path = root.path / profile
+            extensions_path = profile_path / "Extensions"
             if not extensions_path.is_dir():
                 continue
 
+            settings = self.__load_chromium_settings(profile_path)
             try:
                 extension_folders = sorted(
                     path
@@ -209,45 +278,31 @@ class Scanner:
                 continue
 
             for extension_folder in extension_folders:
+                setting = settings.get(extension_folder.name, {})
+                manifest_path = self.__manifest_path(
+                    extensions_path, extension_folder, setting
+                )
+                if manifest_path is None:
+                    continue
+
                 try:
-                    version_dirs = [path for path in extension_folder.iterdir() if path.is_dir()]
-                    if not version_dirs:
-                        continue
-                    extension_version_path = version_dirs[0]
-                    manifest_path = extension_version_path / "manifest.json"
                     with manifest_path.open("r", encoding="utf-8") as manifest_file:
                         manifest: Any = json.load(manifest_file)
                 except (OSError, json.JSONDecodeError) as exc:
-                    logging.warning("Failed to read extension %s: %s", extension_folder, exc)
+                    logging.warning("Failed to read %s: %s", manifest_path, exc)
                     continue
 
-                extension_name = manifest.get("name", "")
-                extension_description = manifest.get("description", "")
-                extension_type = "extension"
-
-                if "MSG" in extension_name:
-                    messages_folder = extension_version_path / "_locales" / "en"
-                    if not messages_folder.is_dir():
-                        messages_folder = extension_version_path / "_locales" / "en-US"
-                    try:
-                        messages_file = next(messages_folder.iterdir())
-                        with messages_file.open("r", encoding="utf-8") as messages_json:
-                            messages: Any = json.load(messages_json)
-                        extension_name = self.__parse_chrome_extension_name(
-                            extension_name, messages
-                        )
-                        extension_description = self.__parse_chrome_extension_description(
-                            extension_description, messages
-                        )
-                        extension_type = "app"
-                    except (OSError, StopIteration, json.JSONDecodeError):
-                        pass
-
-                perms = {
-                    "permissions": manifest.get("permissions"),
-                    "origins": manifest.get("hostPermissions"),
-                }
-                profile_path = root.path / profile
+                extension_name, extension_description = self.__localize_manifest(
+                    manifest, manifest_path.parent
+                )
+                permissions = Permission(
+                    permission=manifest.get("permissions"),
+                    origins=manifest.get("host_permissions"),
+                )
+                optional_permissions = Permission(
+                    permission=manifest.get("optional_permissions"),
+                    origins=manifest.get("optional_host_permissions"),
+                )
 
                 extension_info_list.append(
                     ExtensionInfo(
@@ -255,15 +310,15 @@ class Scanner:
                         browser=browser,
                         browser_short=root.browser,
                         profile=profile,
-                        risk=self.__calculate_risk(Permission.parse(perms)),
+                        risk=self.__calculate_risk(permissions),
                         extension_id=extension_folder.name,
                         name=extension_name,
-                        version=extension_version_path.name.replace("_0", ""),
-                        extension_type=extension_type,
+                        version=manifest.get("version", ""),
+                        extension_type=self.__extension_type(manifest),
                         description=extension_description,
                         creator=manifest.get("author", ""),
-                        homepage_url="",
-                        active=True,
+                        homepage_url=manifest.get("homepage_url", ""),
+                        active=setting.get("state") == 1,
                         install_date=datetime.fromtimestamp(
                             os.path.getctime(extension_folder)
                         ),
@@ -271,8 +326,8 @@ class Scanner:
                             os.path.getmtime(extension_folder)
                         ),
                         path=str(extension_folder),
-                        user_permissions=Permission.parse(perms),
-                        optional_permissions=Permission(),
+                        user_permissions=permissions,
+                        optional_permissions=optional_permissions,
                         connections=self.__get_chromium_connections(profile_path),
                     )
                 )
