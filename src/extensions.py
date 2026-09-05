@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
+from urllib.parse import urlparse
 
 from profiles import BrowserProfileRoot, browser_profile_roots, discover_user_homes
 
@@ -171,12 +172,14 @@ class Scanner:
     def __decode(self, encoded: str) -> Optional[str]:
         try:
             decoded = base64.b64decode(encoded).decode("utf-8")
-            if "chrome-extension://" in decoded:
-                return decoded.split("chrome-extension://")[-1]
-            return None
         except Exception as exc:
             logging.debug("Failed to decode anonymization key: %s", exc)
             return None
+
+        marker = "chrome-extension://"
+        if marker not in decoded:
+            return None
+        return decoded.split(marker, 1)[1].split("/", 1)[0]
 
     def __load_chromium_settings(self, profile_path: Path) -> dict[str, Any]:
         preferences_path = profile_path / "Preferences"
@@ -278,7 +281,8 @@ class Scanner:
                 continue
 
             for extension_folder in extension_folders:
-                setting = settings.get(extension_folder.name, {})
+                extension_id = extension_folder.name
+                setting = settings.get(extension_id, {})
                 manifest_path = self.__manifest_path(
                     extensions_path, extension_folder, setting
                 )
@@ -311,7 +315,7 @@ class Scanner:
                         browser_short=root.browser,
                         profile=profile,
                         risk=self.__calculate_risk(permissions),
-                        extension_id=extension_folder.name,
+                        extension_id=extension_id,
                         name=extension_name,
                         version=manifest.get("version", ""),
                         extension_type=self.__extension_type(manifest),
@@ -328,13 +332,17 @@ class Scanner:
                         path=str(extension_folder),
                         user_permissions=permissions,
                         optional_permissions=optional_permissions,
-                        connections=self.__get_chromium_connections(profile_path),
+                        connections=self.__get_chromium_connections(
+                            profile_path, extension_id
+                        ),
                     )
                 )
 
         return extension_info_list
 
-    def __get_chromium_connections(self, profile_path: Path) -> list[Connection]:
+    def __get_chromium_connections(
+        self, profile_path: Path, extension_id: str
+    ) -> list[Connection]:
         possible_paths = [
             profile_path / "Network" / "Network Persistent State",
             profile_path / "Network Persistent State",
@@ -355,18 +363,22 @@ class Scanner:
 
         for server in properties.get("servers", []):
             anonymization = server.get("anonymization", [None])
-            if anonymization and self.__decode(anonymization[0]) and server.get("server"):
+            if not anonymization or self.__decode(anonymization[0]) != extension_id:
+                continue
+            server_url = server.get("server")
+            if server_url:
+                parsed = urlparse(server_url)
                 connections.append(
-                    Connection(
-                        domain_name=server["server"].replace("https://", "").split(":")[0],
-                        active=True,
-                    )
+                    Connection(domain_name=parsed.hostname or server_url, active=True)
                 )
 
         for broken in properties.get("broken_alternative_services", []):
             anonymization = broken.get("anonymization", [None])
-            if anonymization and self.__decode(anonymization[0]) and broken.get("host"):
-                connections.append(Connection(domain_name=broken["host"], active=False))
+            if not anonymization or self.__decode(anonymization[0]) != extension_id:
+                continue
+            host = broken.get("host")
+            if host:
+                connections.append(Connection(domain_name=host, active=False))
 
         return connections
 
